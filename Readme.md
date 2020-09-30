@@ -2,6 +2,8 @@
 
 ### Live Interaction [![Run on Repl.it](https://repl.it/badge/github/Grv-Singh/Solar-Power-Forecasting)](https://repl.it/github/Grv-Singh/Solar-Power-Forecasting)
 
+<iframe src="//www.slideshare.net/slideshow/embed_code/key/MhAlWLUTGaWuZZ" width="477" height="510" frameborder="0" marginwidth="0" marginheight="0" scrolling="no" style="border:1px solid #CCC; border-width:1px; margin-bottom:5px; max-width: 100%;" allowfullscreen> </iframe> <div style="margin-bottom:5px"> <strong> <a href="//www.slideshare.net/GauravSingh1391/solar-power-forecasting-report" title="Solar power forecasting report" target="_blank">Solar power forecasting report</a> </strong> from <strong><a href="//www.slideshare.net/GauravSingh1391" target="_blank">Gaurav S.</a></strong> </div>
+
 #### German Solar Farm locations :
 ![](https://raw.githubusercontent.com/Grv-Singh/Solar-Power-Forecasting/master/GermanSolarFarm/solarfarm_locations.jpg)
 
