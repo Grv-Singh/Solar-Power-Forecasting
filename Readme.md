@@ -2,7 +2,7 @@
 
 ### Live Interaction [![Run on Repl.it](https://repl.it/badge/github/Grv-Singh/Solar-Power-Forecasting)](https://repl.it/github/Grv-Singh/Solar-Power-Forecasting)
 
-<a href="https://www.slideshare.net/GauravSingh1391/remote-sensing-image-scene-classification" target="_blank">Report</a>
+<a href="https://www.slideshare.net/GauravSingh1391/solar-power-forecasting-report" target="_blank">Report</a>
 
 #### German Solar Farm locations :
 ![](https://raw.githubusercontent.com/Grv-Singh/Solar-Power-Forecasting/master/GermanSolarFarm/solarfarm_locations.jpg)
