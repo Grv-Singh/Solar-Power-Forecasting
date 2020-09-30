@@ -21,8 +21,12 @@ Principal Component Analysis (PCA) is a dimension-reduction tool that can be use
 METHOD: 
 1) Calculate the covariance matrix
 2) Calculate the eigenvectors and eigenvalues of the covariance matrix Since the covariance matrix is square, we can calculate the eigenvectors and eigenvalues for this matrix. These are rather important, as they tell us useful information about our data. By this process of taking the eigenvectors of the covariance matrix, we have been able to extract lines that characterize the data.
-3) Form a feature vector, which is just a fancy name for a matrix of vectors. This is constructed by taking the eigenvectors that you want to keep from the list of Eigen vectors and forming a matrix with these eigenvectors in the columns. `𝐹𝑒𝑎𝑡𝑢𝑟𝑒𝑉𝑒𝑐𝑡𝑜𝑟 = (𝑒𝑖𝑔1 𝑒𝑖𝑔2 𝑒𝑖𝑔3 … … . . 𝑒𝑖𝑔𝑁)`
-4) Deriving the new data set `𝐹𝑖𝑛𝑎𝑙𝐷𝑎𝑡𝑎 = 𝑅𝑜𝑤𝐹𝑒𝑎𝑡𝑢𝑟𝑒𝑉𝑒𝑐𝑡𝑜𝑟 𝑋 𝑅𝑜𝑤𝐷𝑎𝑡𝑎𝐴𝑑𝑗𝑢𝑠𝑡`
+3) Form a feature vector, which is just a fancy name for a matrix of vectors. This is constructed by taking the eigenvectors that you want to keep from the list of Eigen vectors and forming a matrix with these eigenvectors in the columns.
+<br>
+`𝐹𝑒𝑎𝑡𝑢𝑟𝑒𝑉𝑒𝑐𝑡𝑜𝑟 = (𝑒𝑖𝑔1 𝑒𝑖𝑔2 𝑒𝑖𝑔3 … … . . 𝑒𝑖𝑔𝑁)`
+4) Deriving the new data set
+<br>
+`𝐹𝑖𝑛𝑎𝑙𝐷𝑎𝑡𝑎 = 𝑅𝑜𝑤𝐹𝑒𝑎𝑡𝑢𝑟𝑒𝑉𝑒𝑐𝑡𝑜𝑟 𝑋 𝑅𝑜𝑤𝐷𝑎𝑡𝑎𝐴𝑑𝑗𝑢𝑠𝑡`
 
 #### ANN (Artificial Neural Network): -
 Artificial neural networks (ANNs) or connection systems are computing systems vaguely inspired by the biological neural networks that constitute animal brains. Such systems "learn" (i.e. progressively improve performance on) tasks by considering examples, generally without task-specific programming. An ANN is based on a collection of connected units or nodes called artificial neurons (a simplified version of biological neurons in an animal brain). Each connection (a simplified version of a synapse) between artificial neurons can transmit a signal from one to another. The artificial neuron that receives the signal can process it and then signal artificial neurons connected to it.
@@ -38,16 +42,22 @@ Steps:
 #### Libraries Used:
 ##### Scikit-Learn: 
     Scikit-learn (formerly scikits.learn) is a free software machine learning library for the Python programming language It features various classification, regression and clustering algorithms including support vector machines, random forests, gradient boosting, k-means and DBSCAN, and is designed to interoperate with the Python numerical and scientific libraries NumPy and SciPy.
+    <br>
 ##### Keras:
     Keras is a high-level neural networks API, written in Python and capable of running on top of TensorFlow, CNTK, or Theano. It was developed with a focus on enabling fast experimentation.
+    <br>
 ##### Pandas:
     Pandas is an open source, BSD-licensed library providing high-performance, easy-to- use data structures and data analysis tools for the Python programming language.
+    <br>
 ##### Matplotlib:
     Matplotlib is a Python 2D plotting library which produces publication quality figures in a variety of hardcopy formats and interactive environments across platforms. Matplotlib can be used in Python scripts, the Python and iPython shells, the Jupyter notebook, web application servers, and four graphical user interface toolkits.
+    <br>
 ##### PVlib:
     PVLIB Python is a community supported tool that provides a set of functions and classes for simulating the performance of photovoltaic energy systems.
+    <br>
 ##### Itertools:
     Itertools is a module for the Python language which contains high level functional constructs for working with iterable objects and generators. Itertools is a module for the Python language which contains high level functional constructs for working with iterable objects and generators.
+    <br>
 ##### Numpy:
     NumPy is a library for the Python programming language, adding support for large, multi-dimensional arrays and matrices, along with a large collection of high-level, mathematical functions to operate on these arrays.
 
