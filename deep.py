@@ -1,137 +1,80 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
-
-dataset = pd.read_csv('pv_01.csv')
-X = dataset.iloc[:, 3:13].values
-y = dataset.iloc[:, 13].values
-
-# Encoding categorical data
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
-labelencoder_X_1 = LabelEncoder()
-X[:, 1] = labelencoder_X_1.fit_transform(X[:, 1])
-labelencoder_X_2 = LabelEncoder()
-X[:, 2] = labelencoder_X_2.fit_transform(X[:, 2])
-onehotencoder = OneHotEncoder(categorical_features = [1])
-X = onehotencoder.fit_transform(X).toarray()
-X = X[:, 1:]
-
-# Splitting the dataset into the Training set and Test set
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 0)
-
-# Feature Scaling
 from sklearn.preprocessing import StandardScaler
-sc = StandardScaler()
-X_train = sc.fit_transform(X_train)
-X_test = sc.transform(X_test)
+from sklearn.metrics import mean_squared_error, r2_score
 
-import keras
-from keras.models import Sequential
-from keras.layers import Dense
+def main():
+    print("Loading dataset...")
+    # Load dataset with correct delimiter
+    dataset = pd.read_csv('pv_01.csv', sep=';')
 
-# Initialising the ANN
-classifier = Sequential()
+    # Drop index column and empty trailing column
+    if 'time_idx' in dataset.columns:
+        dataset = dataset.drop(columns=['time_idx'])
+    if 'Unnamed: 51' in dataset.columns:
+        dataset = dataset.drop(columns=['Unnamed: 51'])
 
-# Adding the input layer and the first hidden layer
-classifier.add(Dense(output_dim = 6, init = 'uniform', activation = 'relu', input_dim = 11)) # output kitne pe  bhejna h, unofrm rehnde usse, activation funtion marzi h aur bhi hote h
+    # Separate features and target
+    # Target is 'power_normed'
+    if 'power_normed' not in dataset.columns:
+        raise ValueError("Column 'power_normed' not found in dataset.")
 
-# Adding the second hidden layer
-classifier.add(Dense(output_dim = 6, init = 'uniform', activation = 'relu'))
+    X = dataset.drop(columns=['power_normed']).values
+    y = dataset['power_normed'].values
 
-# Adding the output layer
-classifier.add(Dense(output_dim = 1, init = 'uniform', activation = 'sigmoid'))
+    print(f"Feature shape: {X.shape}")
+    print(f"Target shape: {y.shape}")
 
-# Compiling the ANN
-classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+    # Splitting the dataset into the Training set and Test set
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 0)
 
-# Fitting the ANN to the Training set
-classifier.fit(X_train, y_train, batch_size = 10, nb_epoch = 100)
+    # Feature Scaling
+    sc = StandardScaler()
+    X_train = sc.fit_transform(X_train)
+    X_test = sc.transform(X_test)
 
-# Part 3 - Making the predictions and evaluating the model
+    # Initialising the ANN
+    model = tf.keras.models.Sequential()
 
-# Predicting the Test set results
-y_pred = classifier.predict(X_test)
-y_pred = (y_pred > 0.5)
+    # Adding the input layer and the first hidden layer
+    # Input dimension is the number of features
+    model.add(tf.keras.layers.Dense(units=64, activation='relu', input_dim=X_train.shape[1]))
 
-# Making the Confusion Matrix
-from sklearn.metrics import confusion_matrix
-cm = confusion_matrix(y_test, y_pred)
+    # Adding the second hidden layer
+    model.add(tf.keras.layers.Dense(units=32, activation='relu'))
 
-#=======================================================================================================
+    # Adding a third hidden layer
+    model.add(tf.keras.layers.Dense(units=16, activation='relu'))
 
-# Parameters
-learning_rate = 0.001
-training_epochs = 15
-batch_size = 100
-display_step = 1
+    # Adding the output layer
+    # Since target is normalized 0-1, sigmoid is a good choice for activation,
+    # but linear is often safer for regression. README suggests sigmoid.
+    model.add(tf.keras.layers.Dense(units=1, activation='sigmoid'))
 
-# Network Parameters
-n_hidden_1 = 3 # 1st layer number of neurons
-n_input = 2 # MNIST data input (img shape: 28*28)
-n_classes = 1 # MNIST total classes (0-9 digits)
+    # Compiling the ANN
+    model.compile(optimizer='adam', loss='mean_squared_error')
 
-# tf Graph input
-X = tf.placeholder("float", [None, n_input])
-Y = tf.placeholder("float", [None, n_classes])
+    # Fitting the ANN to the Training set
+    print("Starting training...")
+    history = model.fit(X_train, y_train, batch_size=32, epochs=100, verbose=1, validation_split=0.2)
 
-# Store layers weight & bias
-weights = {
-    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
-    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_hidden_2, n_classes]))
-}
-biases = {
-    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_classes]))
-}
+    # Predicting the Test set results
+    y_pred = model.predict(X_test)
 
+    # Evaluate
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
 
-# Create model
-def multilayer_perceptron(x):
-    # Hidden fully connected layer with 256 neurons
-    layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
-    # Hidden fully connected layer with 256 neurons
-    layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
-    # Output fully connected layer with a neuron for each class
-    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
-    return out_layer
+    print(f"\nResults:")
+    print(f"Root Mean Squared Error (RMSE): {rmse}")
+    print(f"R^2 Score: {r2}")
 
-# Construct model
-logits = multilayer_perceptron(X)
+    # Save the model
+    model.save('solar_ann_model.keras')
+    print("Model saved to solar_ann_model.keras")
 
-# Define loss and optimizer
-loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-    logits=logits, labels=Y))
-optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-train_op = optimizer.minimize(loss_op)
-# Initializing the variables
-init = tf.global_variables_initializer()
-
-with tf.Session() as sess:
-    sess.run(init)
-
-    # Training cycle
-    for epoch in range(training_epochs):
-        avg_cost = 0.
-        total_batch = int(mnist.train.num_examples/batch_size)
-        # Loop over all batches
-        for i in range(total_batch):
-            batch_x, batch_y = mnist.train.next_batch(batch_size)
-            # Run optimization op (backprop) and cost op (to get loss value)
-            _, c = sess.run([train_op, loss_op], feed_dict={X: batch_x,
-                                                            Y: batch_y})
-            # Compute average loss
-            avg_cost += c / total_batch
-        # Display logs per epoch step
-        if epoch % display_step == 0:
-            print("Epoch:", '%04d' % (epoch+1), "cost={:.9f}".format(avg_cost))
-    print("Optimization Finished!")
-
-    # Test model
-    pred = tf.nn.softmax(logits)  # Apply softmax to logits
-    correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(Y, 1))
-    # Calculate accuracy
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-    print("Accuracy:", accuracy.eval({X: mnist.test.images, Y: mnist.test.labels}))
+if __name__ == "__main__":
+    main()
