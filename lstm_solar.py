@@ -1,60 +1,28 @@
 import numpy as np
-import pandas as pd
 import tensorflow as tf
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, r2_score
-
-def create_sequences(X, y, time_steps=1):
-    Xs, ys = [], []
-    for i in range(len(X) - time_steps):
-        v = X[i:(i + time_steps)]
-        Xs.append(v)
-        ys.append(y[i + time_steps])
-    return np.array(Xs), np.array(ys)
+import argparse
+import data_loader
+import matplotlib.pyplot as plt
+import os
 
 def main():
-    print("Loading dataset...")
-    # Load dataset with correct delimiter
-    dataset = pd.read_csv('pv_01.csv', sep=';')
+    parser = argparse.ArgumentParser(description='Train LSTM model for Solar Power Forecasting')
+    parser.add_argument('--file', type=str, default='pv_01.csv', help='Path to the CSV dataset file')
+    parser.add_argument('--epochs', type=int, default=50, help='Number of training epochs')
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
+    parser.add_argument('--time_steps', type=int, default=8, help='Time steps for LSTM sequence')
+    args = parser.parse_args()
 
-    # Drop index column and empty trailing column
-    if 'time_idx' in dataset.columns:
-        dataset = dataset.drop(columns=['time_idx'])
-    if 'Unnamed: 51' in dataset.columns:
-        dataset = dataset.drop(columns=['Unnamed: 51'])
-
-    # Check for target column
-    if 'power_normed' not in dataset.columns:
-        raise ValueError("Column 'power_normed' not found.")
-
-    features = dataset.drop(columns=['power_normed']).values
-    target = dataset['power_normed'].values.reshape(-1, 1)
-
-    # Split into train and test - Time Series Split (no random shuffle)
-    train_size = int(len(dataset) * 0.8)
-
-    # LSTM usually works better with scaling
-    scaler_X = MinMaxScaler()
-    scaler_y = MinMaxScaler()
-
-    # Fit on training data only to avoid data leakage
-    X_train_raw = features[:train_size]
-    X_test_raw = features[train_size:]
-    y_train_raw = target[:train_size]
-    y_test_raw = target[train_size:]
-
-    X_train_scaled = scaler_X.fit_transform(X_train_raw)
-    X_test_scaled = scaler_X.transform(X_test_raw)
-
-    y_train_scaled = scaler_y.fit_transform(y_train_raw)
-    y_test_scaled = scaler_y.transform(y_test_raw)
-
-    # Create sequences
-    # Using 8 steps (approx 1 day given 3h resolution)
-    TIME_STEPS = 8
-
-    X_train, y_train = create_sequences(X_train_scaled, y_train_scaled, TIME_STEPS)
-    X_test, y_test = create_sequences(X_test_scaled, y_test_scaled, TIME_STEPS)
+    # Load and preprocess
+    try:
+        dataset = data_loader.load_data(args.file)
+        X_train, y_train, X_test, y_test, scaler_X, scaler_y = data_loader.preprocess_data_lstm(
+            dataset, time_steps=args.time_steps
+        )
+    except Exception as e:
+        print(f"Error: {e}")
+        return
 
     print(f"X_train shape: {X_train.shape}")
     print(f"y_train shape: {y_train.shape}")
@@ -72,13 +40,11 @@ def main():
 
     model.compile(optimizer='adam', loss='mean_squared_error')
 
-    print("Starting training...")
-    # Shuffle=False is often used for stateful LSTMs, but here samples are created as windows.
-    # Shuffling windows is fine and helps training convergence.
+    print(f"Starting training on {args.file}...")
     history = model.fit(
         X_train, y_train,
-        epochs=50,
-        batch_size=32,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
         validation_split=0.1,
         verbose=1,
         shuffle=True
@@ -97,13 +63,21 @@ def main():
     rmse = np.sqrt(mse)
     r2 = r2_score(y_test_inv, y_pred)
 
-    print(f"\nResults:")
+    print(f"\nResults for {args.file}:")
     print(f"Root Mean Squared Error (RMSE): {rmse}")
     print(f"R^2 Score: {r2}")
 
-    # Save the model
-    model.save('solar_lstm_model.keras')
-    print("Model saved to solar_lstm_model.keras")
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    plt.plot(y_test_inv[:100], label='Actual')
+    plt.plot(y_pred[:100], label='Predicted')
+    plt.title(f'LSTM: Actual vs Predicted Power (First 100 samples) - {args.file}')
+    plt.xlabel('Sample')
+    plt.ylabel('Normalized Power')
+    plt.legend()
+    plot_filename = f'lstm_results_{os.path.basename(args.file).split(".")[0]}.png'
+    plt.savefig(plot_filename)
+    print(f"Plot saved to {plot_filename}")
 
 if __name__ == "__main__":
     main()
