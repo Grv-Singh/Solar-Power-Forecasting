@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Solar Power Forecasting Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f4f7f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #f39c12 !important;
+        }
+        .card-custom {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            background: #ffffff;
+            transition: transform 0.2s;
+        }
+        .card-custom:hover {
+            transform: translateY(-2px);
+        }
+        .gauge-container {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            margin: 0 auto;
+        }
+        .gauge-val {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #2c3e50;
+        }
+        .btn-forecast {
+            background-color: #f39c12;
+            color: white;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 10px 24px;
+        }
+        .btn-forecast:hover {
+            background-color: #d68910;
+            color: white;
+        }
+        .badge-model {
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark py-3">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fa-solid fa-sun me-2"></i>Solar Forecast World UI</a>
+            <span class="navbar-text text-light small">Live AI Solar Power Predictions (German Farms API)</span>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row g-4">
+
+            <!-- Controls Sidebar -->
+            <div class="col-md-4">
+                <div class="card card-custom p-4">
+                    <h5 class="card-title fw-bold mb-3"><i class="fa-solid fa-sliders text-warning me-2"></i>Forecast Controls</h5>
+                    <hr>
+                    <form id="forecast-form">
+                        <div class="mb-3">
+                            <label for="plant-select" class="form-label fw-semibold">Select PV Facility</label>
+                            <select id="plant-select" class="form-select">
+                                <option value="" disabled selected>Loading solar farms...</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">AI Model Architecture</label>
+                            <div class="d-flex gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="model-type" id="model-ann" value="ann" checked>
+                                    <label class="form-check-label" for="model-ann">ANN (Dense)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="model-type" id="model-lstm" value="lstm">
+                                    <label class="form-check-label" for="model-lstm">LSTM (Time-Series)</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-forecast w-100 mt-2">
+                            <i class="fa-solid fa-bolt me-2"></i>Fetch Live Prediction
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Prediction Results Display -->
+            <div class="col-md-8">
+                <div class="card card-custom p-4 text-center">
+                    <h5 class="card-title fw-bold text-start mb-3">
+                        <i class="fa-solid fa-chart-line text-warning me-2"></i>Live Output Forecast
+                    </h5>
+                    <hr>
+
+                    <div id="loader" class="my-5 d-none">
+                        <div class="spinner-border text-warning" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Fetching real-time satellite & weather API data...</p>
+                    </div>
+
+                    <div id="result-container" class="my-4">
+                        <div class="d-flex justify-content-center align-items-center flex-column my-3">
+                            <div class="gauge-container d-flex justify-content-center align-items-center rounded-circle border border-5 border-warning bg-light">
+                                <span id="output-percentage" class="gauge-val">0.00%</span>
+                            </div>
+                            <h6 class="text-muted mt-3">Normalized Output Capacity</h6>
+                        </div>
+
+                        <div class="row g-3 mt-3 text-start">
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Facility Name</small>
+                                    <strong id="res-plant-name" class="fs-6 text-dark">-</strong>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Model & Timestamp</small>
+                                    <span id="res-model-badge" class="badge bg-primary badge-model me-1">ANN</span>
+                                    <strong id="res-timestamp" class="text-dark small">-</strong>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Location Coordinates</small>
+                                    <strong id="res-coords" class="text-dark">-</strong>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Normalized Value (0.0 to 1.0)</small>
+                                    <strong id="res-norm-val" class="text-dark">-</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const plantSelect = document.getElementById('plant-select');
+            const form = document.getElementById('forecast-form');
+            const loader = document.getElementById('loader');
+            const resultContainer = document.getElementById('result-container');
+
+            // Load Farms
+            try {
+                const res = await fetch('/farms');
+                const data = await res.json();
+                plantSelect.innerHTML = '';
+                for (const [id, info] of Object.entries(data.farms)) {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = `${info.name} (Plant #${id})`;
+                    plantSelect.appendChild(opt);
+                }
+            } catch (err) {
+                console.error("Failed to load farms", err);
+            }
+
+            // Fetch live prediction
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const plantId = plantSelect.value;
+                const modelType = document.querySelector('input[name="model-type"]:checked').value;
+
+                if (!plantId) return;
+
+                loader.classList.remove('d-none');
+                resultContainer.classList.add('d-none');
+
+                try {
+                    const res = await fetch(`/predict?plant_id=${plantId}&model=${modelType}`);
+                    const json = await res.json();
+
+                    if (json.success) {
+                        const data = json.data;
+                        document.getElementById('output-percentage').textContent = data.predicted_power_percentage;
+                        document.getElementById('res-plant-name').textContent = data.plant_name;
+                        document.getElementById('res-model-badge').textContent = data.model_type;
+                        document.getElementById('res-model-badge').className = `badge ${data.model_type === 'LSTM' ? 'bg-success' : 'bg-primary'} badge-model me-1`;
+                        document.getElementById('res-timestamp').textContent = data.timestamp;
+                        document.getElementById('res-coords').textContent = `${data.latitude}° N, ${data.longitude}° E`;
+                        document.getElementById('res-norm-val').textContent = data.predicted_power_normed;
+                    }
+                } catch (err) {
+                    alert("Error fetching prediction: " + err);
+                } finally {
+                    loader.classList.add('d-none');
+                    resultContainer.classList.remove('d-none');
+                }
+            });
+
+            // Trigger initial forecast
+            setTimeout(() => {
+                if (plantSelect.options.length > 0) {
+                    form.dispatchEvent(new Event('submit'));
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>
