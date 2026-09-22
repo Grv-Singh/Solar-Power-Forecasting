@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar Power Forecasting - Live Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f4f7f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #f39c12 !important;
+        }
+        .card-custom {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            background: #ffffff;
+            transition: transform 0.2s;
+        }
+        .card-custom:hover {
+            transform: translateY(-2px);
+        }
+        .gauge-container {
+            position: relative;
+            width: 190px;
+            height: 190px;
+            margin: 0 auto;
+        }
+        .gauge-val {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #2c3e50;
+        }
+        .btn-forecast {
+            background-color: #f39c12;
+            color: white;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 10px 24px;
+        }
+        .btn-forecast:hover {
+            background-color: #d68910;
+            color: white;
+        }
+        .badge-model {
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark py-3">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fa-solid fa-sun me-2"></i>Solar Power Forecasting (GitHub Pages)</a>
+            <span class="navbar-text text-light small">Live AI Forecast Client (Open-Meteo Integration)</span>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row g-4">
+
+            <!-- Controls Sidebar -->
+            <div class="col-md-4">
+                <div class="card card-custom p-4">
+                    <h5 class="card-title fw-bold mb-3"><i class="fa-solid fa-sliders text-warning me-2"></i>Forecast Controls</h5>
+                    <hr>
+                    <form id="forecast-form">
+                        <div class="mb-3">
+                            <label for="plant-select" class="form-label fw-semibold">Select PV Facility</label>
+                            <select id="plant-select" class="form-select">
+                                <!-- Farm Options -->
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">AI Architecture</label>
+                            <div class="p-2 bg-light rounded text-center">
+                                <span class="badge bg-primary badge-model"><i class="fa-solid fa-brain me-1"></i>ANN Neural Network</span>
+                                <small class="d-block text-muted mt-1">Client-side browser inference</small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-forecast w-100 mt-2">
+                            <i class="fa-solid fa-bolt me-2"></i>Fetch Live Prediction
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Prediction Results Display -->
+            <div class="col-md-8">
+                <div class="card card-custom p-4 text-center">
+                    <h5 class="card-title fw-bold text-start mb-3">
+                        <i class="fa-solid fa-chart-line text-warning me-2"></i>Live Forecast Output
+                    </h5>
+                    <hr>
+
+                    <div id="loader" class="my-5 d-none">
+                        <div class="spinner-border text-warning" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Fetching real-time solar irradiance & weather data...</p>
+                    </div>
+
+                    <div id="result-container" class="my-4">
+                        <div class="d-flex justify-content-center align-items-center flex-column my-3">
+                            <div class="gauge-container d-flex justify-content-center align-items-center rounded-circle border border-5 border-warning bg-light">
+                                <span id="output-percentage" class="gauge-val">0.00%</span>
+                            </div>
+                            <h6 class="text-muted mt-3">Predicted Capacity Output</h6>
+                        </div>
+
+                        <div class="row g-3 mt-3 text-start">
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Facility Name</small>
+                                    <strong id="res-plant-name" class="fs-6 text-dark">-</strong>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Model & Timestamp</small>
+                                    <span class="badge bg-primary badge-model me-1">ANN</span>
+                                    <strong id="res-timestamp" class="text-dark small">-</strong>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Location Coordinates</small>
+                                    <strong id="res-coords" class="text-dark">-</strong>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="p-3 bg-light rounded">
+                                    <small class="text-muted d-block">Normalized Value (0.0 to 1.0)</small>
+                                    <strong id="res-norm-val" class="text-dark">-</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const GERMAN_SOLAR_FARMS = {
+            1: {"name": "Solar Farm 1 (Northern Germany)", "lat": 53.55, "lon": 9.99},
+            2: {"name": "Solar Farm 2 (Brandenburg)", "lat": 52.52, "lon": 13.40},
+            3: {"name": "Solar Farm 3 (Saxony)", "lat": 51.05, "lon": 13.73},
+            4: {"name": "Solar Farm 4 (Bavaria)", "lat": 48.13, "lon": 11.58},
+            5: {"name": "Solar Farm 5 (Baden-Württemberg)", "lat": 48.77, "lon": 9.18},
+            6: {"name": "Solar Farm 6 (Hesse)", "lat": 50.11, "lon": 8.68},
+            7: {"name": "Solar Farm 7 (North Rhine-Westphalia)", "lat": 51.22, "lon": 6.77},
+            8: {"name": "Solar Farm 8 (Lower Saxony)", "lat": 52.37, "lon": 9.73},
+            9: {"name": "Solar Farm 9 (Schleswig-Holstein)", "lat": 54.32, "lon": 10.13},
+            10: {"name": "Solar Farm 10 (Mecklenburg-Vorpommern)", "lat": 53.63, "lon": 11.41},
+            11: {"name": "Solar Farm 11 (Rhineland-Palatinate)", "lat": 49.99, "lon": 8.24},
+            12: {"name": "Solar Farm 12 (Thuringia)", "lat": 50.98, "lon": 11.02},
+            13: {"name": "Solar Farm 13 (Saxony-Anhalt)", "lat": 52.12, "lon": 11.62},
+            14: {"name": "Solar Farm 14 (Saarland)", "lat": 49.23, "lon": 6.99},
+            15: {"name": "Solar Farm 15 (Bavaria South)", "lat": 47.80, "lon": 11.00},
+            16: {"name": "Solar Farm 16 (Bavaria East)", "lat": 48.90, "lon": 12.10},
+            17: {"name": "Solar Farm 17 (Baden-Württemberg West)", "lat": 48.00, "lon": 7.85},
+            18: {"name": "Solar Farm 18 (Brandenburg South)", "lat": 51.75, "lon": 14.33},
+            19: {"name": "Solar Farm 19 (Lower Saxony West)", "lat": 53.14, "lon": 8.21},
+            20: {"name": "Solar Farm 20 (North Rhine-Westphalia North)", "lat": 51.96, "lon": 7.62},
+            21: {"name": "Solar Farm 21 (Hesse North)", "lat": 51.31, "lon": 9.49}
+        };
+
+        let modelWeights = null;
+        let scalerParams = null;
+
+        async function loadModelAndScaler() {
+            if (!modelWeights) {
+                const resW = await fetch('model_weights.json');
+                modelWeights = await resW.json();
+            }
+            if (!scalerParams) {
+                const resS = await fetch('scaler_params.json');
+                scalerParams = await resS.json();
+            }
+        }
+
+        function relu(x) { return Math.max(0, x); }
+        function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+        function forwardPass(X_raw) {
+            // Standard scaling X
+            let X = X_raw.map((val, i) => (val - scalerParams.mean_X[i]) / scalerParams.scale_X[i]);
+
+            let current_activation = X;
+            for (const layer of modelWeights) {
+                let next_activation = [];
+                const W = layer.weights; // shape [in_dim, out_dim]
+                const b = layer.biases;  // shape [out_dim]
+                const out_dim = b.length;
+
+                for (let j = 0; j < out_dim; j++) {
+                    let sum = b[j];
+                    for (let i = 0; i < current_activation.length; i++) {
+                        sum += current_activation[i] * W[i][j];
+                    }
+                    if (layer.activation === 'relu') {
+                        sum = relu(sum);
+                    } else if (layer.activation === 'sigmoid') {
+                        sum = sigmoid(sum);
+                    }
+                    next_activation.push(sum);
+                }
+                current_activation = next_activation;
+            }
+
+            // Unscale y
+            let y_scaled = current_activation[0];
+            let y_orig = (y_scaled * scalerParams.scale_y) + scalerParams.mean_y;
+            return Math.min(Math.max(y_orig, 0.0), 1.0);
+        }
+
+        async function fetchOpenMeteoData(lat, lon) {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,surface_pressure,cloud_cover,snow_depth,direct_normal_irradiance,diffuse_radiation,shortwave_radiation,wind_speed_10m,wind_direction_10m,wind_speed_100m,wind_direction_100m&timezone=UTC`;
+            const res = await fetch(url);
+            return await res.json();
+        }
+
+        function extractFeatures(hourly, t_idx=0) {
+            const timeStr = hourly.time[t_idx];
+            const dt = new Date(timeStr);
+
+            const hour = dt.getUTCHours();
+            const month = dt.getUTCMonth() + 1;
+
+            const hour_norm = hour / 23.0;
+            const hour_cos = Math.cos(2 * Math.PI * hour / 24.0);
+            const hour_sin = Math.sin(2 * Math.PI * hour / 24.0);
+
+            const month_norm = (month - 1) / 11.0;
+            const month_cos = Math.cos(2 * Math.PI * month / 12.0);
+            const month_sin = Math.sin(2 * Math.PI * month / 12.0);
+
+            const season = Math.floor((month % 12 + 3) / 3);
+            const season_norm = season / 4.0;
+            const season_cos = Math.cos(2 * Math.PI * season / 4.0);
+            const season_sin = Math.sin(2 * Math.PI * season / 4.0);
+
+            const temp = hourly.temperature_2m ? hourly.temperature_2m[t_idx] : 15.0;
+            const rh = hourly.relative_humidity_2m ? hourly.relative_humidity_2m[t_idx] : 50.0;
+            const dew = hourly.dew_point_2m ? hourly.dew_point_2m[t_idx] : 10.0;
+            const press = hourly.surface_pressure ? hourly.surface_pressure[t_idx] : 1013.25;
+            const cloud = hourly.cloud_cover ? hourly.cloud_cover[t_idx] : 20.0;
+            const snow = hourly.snow_depth ? hourly.snow_depth[t_idx] : 0.0;
+
+            const dni = hourly.direct_normal_irradiance ? hourly.direct_normal_irradiance[t_idx] : 0.0;
+            const diffuse = hourly.diffuse_radiation ? hourly.diffuse_radiation[t_idx] : 0.0;
+            const sw = hourly.shortwave_radiation ? hourly.shortwave_radiation[t_idx] : 0.0;
+
+            const ws10 = hourly.wind_speed_10m ? hourly.wind_speed_10m[t_idx] : 3.0;
+            const wd10 = hourly.wind_direction_10m ? hourly.wind_direction_10m[t_idx] : 180.0;
+            const ws100 = hourly.wind_speed_100m ? hourly.wind_speed_100m[t_idx] : 5.0;
+            const wd100 = hourly.wind_direction_100m ? hourly.wind_direction_100m[t_idx] : 180.0;
+
+            const temp_norm = Math.min(Math.max((temp + 20) / 60.0, 0), 1);
+            const rh_norm = Math.min(Math.max(rh / 100.0, 0), 1);
+            const dew_norm = Math.min(Math.max((dew + 20) / 40.0, 0), 1);
+            const press_norm = Math.min(Math.max((press - 950) / 100.0, 0), 1);
+            const cloud_norm = Math.min(Math.max(cloud / 100.0, 0), 1);
+            const snow_norm = Math.min(Math.max(snow / 1.0, 0), 1);
+
+            const dni_norm = Math.min(Math.max(dni / 1000.0, 0), 1);
+            const diffuse_norm = Math.min(Math.max(diffuse / 500.0, 0), 1);
+            const global_norm = Math.min(Math.max(sw / 1000.0, 0), 1);
+
+            const ws10_norm = Math.min(Math.max(ws10 / 25.0, 0), 1);
+            const wd10_rad = wd10 * Math.PI / 180.0;
+            const wd10_cos = Math.cos(wd10_rad);
+            const wd10_sin = Math.sin(wd10_rad);
+
+            const ws100_norm = Math.min(Math.max(ws100 / 35.0, 0), 1);
+            const wd100_rad = wd10 * Math.PI / 180.0;
+            const wd100_cos = Math.cos(wd100_rad);
+            const wd100_sin = Math.sin(wd100_rad);
+
+            const solar_height = Math.max(0.0, Math.sin((Math.max(0, (12 - Math.abs(hour - 12)) * 15)) * Math.PI / 180.0));
+            const theta_z = 1.0 - solar_height;
+            const solar_azimuth = hour / 24.0;
+
+            const vec = [
+                hour_norm, hour_cos, hour_sin, month_norm, month_cos, month_sin,
+                season_norm, season_cos, season_sin, theta_z, solar_azimuth,
+                global_norm * 0.9, solar_height, diffuse_norm, dni_norm, global_norm,
+                diffuse_norm, dni_norm, global_norm, 0.15,
+                ws10_norm * wd10_sin, ws10_norm * wd10_cos,
+                ws100_norm * wd100_sin, ws100_norm * wd100_cos,
+                dew_norm, temp_norm, 0.5, 0.5, rh_norm, rh_norm, rh_norm,
+                snow_norm * 0.3, snow_norm, 0.0, press_norm,
+                global_norm, dni_norm, diffuse_norm, cloud_norm,
+                ws10_norm, wd10 / 360.0, wd10 / 360.0, wd10_cos, wd10_sin,
+                ws100_norm, wd100 / 360.0, wd100 / 360.0, wd100_cos, wd100_sin
+            ];
+
+            return { vec, timeStr };
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const plantSelect = document.getElementById('plant-select');
+            const form = document.getElementById('forecast-form');
+            const loader = document.getElementById('loader');
+            const resultContainer = document.getElementById('result-container');
+
+            // Populate farm selector
+            for (const [id, info] of Object.entries(GERMAN_SOLAR_FARMS)) {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = `${info.name} (Plant #${id})`;
+                plantSelect.appendChild(opt);
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const plantId = plantSelect.value;
+                const farm = GERMAN_SOLAR_FARMS[plantId];
+
+                loader.classList.remove('d-none');
+                resultContainer.classList.add('d-none');
+
+                try {
+                    await loadModelAndScaler();
+                    const apiData = await fetchOpenMeteoData(farm.lat, farm.lon);
+                    const { vec, timeStr } = extractFeatures(apiData.hourly, 0);
+
+                    const pred_val = forwardPass(vec);
+                    const percentage = (pred_val * 100).toFixed(2) + '%';
+
+                    document.getElementById('output-percentage').textContent = percentage;
+                    document.getElementById('res-plant-name').textContent = farm.name;
+                    document.getElementById('res-timestamp').textContent = timeStr;
+                    document.getElementById('res-coords').textContent = `${farm.lat}° N, ${farm.lon}° E`;
+                    document.getElementById('res-norm-val').textContent = pred_val.toFixed(4);
+
+                } catch (err) {
+                    alert("Forecast error: " + err);
+                } finally {
+                    loader.classList.add('d-none');
+                    resultContainer.classList.remove('d-none');
+                }
+            });
+
+            // Auto-trigger initial forecast
+            setTimeout(() => {
+                form.dispatchEvent(new Event('submit'));
+            }, 300);
+        });
+    </script>
+</body>
+</html>
