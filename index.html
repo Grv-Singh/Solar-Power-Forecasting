@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solar Power Forecasting - Live Dashboard</title>
+    <title>Enterprise Solar Power Forecasting Platform</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             background-color: #f4f7f6;
@@ -24,12 +25,6 @@
         }
         .card-custom:hover {
             transform: translateY(-2px);
-        }
-        .gauge-container {
-            position: relative;
-            width: 190px;
-            height: 190px;
-            margin: 0 auto;
         }
         .gauge-val {
             font-size: 2.2rem;
@@ -52,14 +47,17 @@
             padding: 6px 12px;
             border-radius: 20px;
         }
+        .kpi-card {
+            border-left: 4px solid #f39c12;
+        }
     </style>
 </head>
 <body>
 
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark py-3">
         <div class="container">
-            <a class="navbar-brand" href="#"><i class="fa-solid fa-sun me-2"></i>Solar Power Forecasting (GitHub Pages)</a>
-            <span class="navbar-text text-light small">Live AI Forecast Client (Open-Meteo Integration)</span>
+            <a class="navbar-brand" href="#"><i class="fa-solid fa-solar-panel me-2"></i>Solar Intelligence Platform</a>
+            <span class="navbar-text text-light small">Live AI Solar Power, Yield & Carbon Offset Analytics</span>
         </div>
     </nav>
 
@@ -67,7 +65,7 @@
         <div class="row g-4">
 
             <!-- Controls Sidebar -->
-            <div class="col-md-4">
+            <div class="col-lg-4">
                 <div class="card card-custom p-4">
                     <h5 class="card-title fw-bold mb-3"><i class="fa-solid fa-sliders text-warning me-2"></i>Forecast Controls</h5>
                     <hr>
@@ -75,8 +73,19 @@
                         <div class="mb-3">
                             <label for="plant-select" class="form-label fw-semibold">Select PV Facility</label>
                             <select id="plant-select" class="form-select">
-                                <!-- Farm Options -->
+                                <!-- Options -->
                             </select>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">Lat</label>
+                                <input type="number" step="0.01" id="custom-lat" class="form-control form-control-sm" placeholder="e.g. 52.52">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">Lon</label>
+                                <input type="number" step="0.01" id="custom-lon" class="form-control form-control-sm" placeholder="e.g. 13.40">
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -94,30 +103,50 @@
                 </div>
             </div>
 
-            <!-- Prediction Results Display -->
-            <div class="col-md-8">
-                <div class="card card-custom p-4 text-center">
+            <!-- Dashboard Analytics -->
+            <div class="col-lg-8">
+                <!-- KPI Highlights -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="card card-custom p-3 kpi-card">
+                            <small class="text-muted d-block fw-semibold">Capacity Output</small>
+                            <span id="kpi-output" class="fs-3 fw-bold text-dark">0.00%</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card card-custom p-3 kpi-card" style="border-left-color: #2ecc71;">
+                            <small class="text-muted d-block fw-semibold">Est. Day Revenue (€)</small>
+                            <span id="kpi-revenue" class="fs-3 fw-bold text-success">€0.00</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card card-custom p-3 kpi-card" style="border-left-color: #3498db;">
+                            <small class="text-muted d-block fw-semibold">CO₂ Offset (kg)</small>
+                            <span id="kpi-co2" class="fs-3 fw-bold text-primary">0.0 kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart & Output -->
+                <div class="card card-custom p-4">
                     <h5 class="card-title fw-bold text-start mb-3">
-                        <i class="fa-solid fa-chart-line text-warning me-2"></i>Live Forecast Output
+                        <i class="fa-solid fa-chart-area text-warning me-2"></i>24-Hour Ahead Hourly Power Curve
                     </h5>
                     <hr>
 
-                    <div id="loader" class="my-5 d-none">
+                    <div id="loader" class="my-5 text-center d-none">
                         <div class="spinner-border text-warning" role="status" style="width: 3rem; height: 3rem;">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <p class="mt-3 text-muted">Fetching real-time solar irradiance & weather data...</p>
+                        <p class="mt-3 text-muted">Fetching satellite weather forecast & running AI inference...</p>
                     </div>
 
-                    <div id="result-container" class="my-4">
-                        <div class="d-flex justify-content-center align-items-center flex-column my-3">
-                            <div class="gauge-container d-flex justify-content-center align-items-center rounded-circle border border-5 border-warning bg-light">
-                                <span id="output-percentage" class="gauge-val">0.00%</span>
-                            </div>
-                            <h6 class="text-muted mt-3">Predicted Capacity Output</h6>
+                    <div id="result-container">
+                        <div class="mb-4">
+                            <canvas id="forecastChart" style="max-height: 280px;"></canvas>
                         </div>
 
-                        <div class="row g-3 mt-3 text-start">
+                        <div class="row g-3 text-start">
                             <div class="col-sm-6">
                                 <div class="p-3 bg-light rounded">
                                     <small class="text-muted d-block">Facility Name</small>
@@ -126,20 +155,19 @@
                             </div>
                             <div class="col-sm-6">
                                 <div class="p-3 bg-light rounded">
-                                    <small class="text-muted d-block">Model & Timestamp</small>
-                                    <span class="badge bg-primary badge-model me-1">ANN</span>
+                                    <small class="text-muted d-block">Timestamp</small>
                                     <strong id="res-timestamp" class="text-dark small">-</strong>
                                 </div>
                             </div>
                             <div class="col-sm-6">
                                 <div class="p-3 bg-light rounded">
-                                    <small class="text-muted d-block">Location Coordinates</small>
+                                    <small class="text-muted d-block">Coordinates</small>
                                     <strong id="res-coords" class="text-dark">-</strong>
                                 </div>
                             </div>
                             <div class="col-sm-6">
                                 <div class="p-3 bg-light rounded">
-                                    <small class="text-muted d-block">Normalized Value (0.0 to 1.0)</small>
+                                    <small class="text-muted d-block">Normalized Value (0.0 - 1.0)</small>
                                     <strong id="res-norm-val" class="text-dark">-</strong>
                                 </div>
                             </div>
@@ -179,6 +207,7 @@
 
         let modelWeights = null;
         let scalerParams = null;
+        let chartInstance = null;
 
         async function loadModelAndScaler() {
             if (!modelWeights) {
@@ -195,14 +224,12 @@
         function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
 
         function forwardPass(X_raw) {
-            // Standard scaling X
             let X = X_raw.map((val, i) => (val - scalerParams.mean_X[i]) / scalerParams.scale_X[i]);
-
             let current_activation = X;
             for (const layer of modelWeights) {
                 let next_activation = [];
-                const W = layer.weights; // shape [in_dim, out_dim]
-                const b = layer.biases;  // shape [out_dim]
+                const W = layer.weights;
+                const b = layer.biases;
                 const out_dim = b.length;
 
                 for (let j = 0; j < out_dim; j++) {
@@ -210,17 +237,12 @@
                     for (let i = 0; i < current_activation.length; i++) {
                         sum += current_activation[i] * W[i][j];
                     }
-                    if (layer.activation === 'relu') {
-                        sum = relu(sum);
-                    } else if (layer.activation === 'sigmoid') {
-                        sum = sigmoid(sum);
-                    }
+                    if (layer.activation === 'relu') sum = relu(sum);
+                    else if (layer.activation === 'sigmoid') sum = sigmoid(sum);
                     next_activation.push(sum);
                 }
                 current_activation = next_activation;
             }
-
-            // Unscale y
             let y_scaled = current_activation[0];
             let y_orig = (y_scaled * scalerParams.scale_y) + scalerParams.mean_y;
             return Math.min(Math.max(y_orig, 0.0), 1.0);
@@ -235,18 +257,15 @@
         function extractFeatures(hourly, t_idx=0) {
             const timeStr = hourly.time[t_idx];
             const dt = new Date(timeStr);
-
             const hour = dt.getUTCHours();
             const month = dt.getUTCMonth() + 1;
 
             const hour_norm = hour / 23.0;
             const hour_cos = Math.cos(2 * Math.PI * hour / 24.0);
             const hour_sin = Math.sin(2 * Math.PI * hour / 24.0);
-
             const month_norm = (month - 1) / 11.0;
             const month_cos = Math.cos(2 * Math.PI * month / 12.0);
             const month_sin = Math.sin(2 * Math.PI * month / 12.0);
-
             const season = Math.floor((month % 12 + 3) / 3);
             const season_norm = season / 4.0;
             const season_cos = Math.cos(2 * Math.PI * season / 4.0);
@@ -310,13 +329,43 @@
             return { vec, timeStr };
         }
 
+        function renderChart(labels, dataSeries) {
+            const ctx = document.getElementById('forecastChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Predicted Power Output (%)',
+                        data: dataSeries,
+                        borderColor: '#f39c12',
+                        backgroundColor: 'rgba(243, 156, 18, 0.15)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, title: { display: true, text: 'Capacity (%)' } },
+                        x: { title: { display: true, text: 'Time (UTC)' } }
+                    }
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             const plantSelect = document.getElementById('plant-select');
+            const customLat = document.getElementById('custom-lat');
+            const customLon = document.getElementById('custom-lon');
             const form = document.getElementById('forecast-form');
             const loader = document.getElementById('loader');
             const resultContainer = document.getElementById('result-container');
 
-            // Populate farm selector
             for (const [id, info] of Object.entries(GERMAN_SOLAR_FARMS)) {
                 const opt = document.createElement('option');
                 opt.value = id;
@@ -324,27 +373,57 @@
                 plantSelect.appendChild(opt);
             }
 
+            plantSelect.addEventListener('change', () => {
+                const farm = GERMAN_SOLAR_FARMS[plantSelect.value];
+                if (farm) {
+                    customLat.value = farm.lat;
+                    customLon.value = farm.lon;
+                }
+            });
+
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const plantId = plantSelect.value;
-                const farm = GERMAN_SOLAR_FARMS[plantId];
+                let lat = parseFloat(customLat.value) || GERMAN_SOLAR_FARMS[plantSelect.value]?.lat || 52.52;
+                let lon = parseFloat(customLon.value) || GERMAN_SOLAR_FARMS[plantSelect.value]?.lon || 13.40;
+                let plantName = GERMAN_SOLAR_FARMS[plantSelect.value]?.name || `Custom Location (${lat}, ${lon})`;
 
                 loader.classList.remove('d-none');
                 resultContainer.classList.add('d-none');
 
                 try {
                     await loadModelAndScaler();
-                    const apiData = await fetchOpenMeteoData(farm.lat, farm.lon);
-                    const { vec, timeStr } = extractFeatures(apiData.hourly, 0);
+                    const apiData = await fetchOpenMeteoData(lat, lon);
 
-                    const pred_val = forwardPass(vec);
-                    const percentage = (pred_val * 100).toFixed(2) + '%';
+                    const labels = [];
+                    const predictions = [];
+                    let sumPower = 0;
 
-                    document.getElementById('output-percentage').textContent = percentage;
-                    document.getElementById('res-plant-name').textContent = farm.name;
-                    document.getElementById('res-timestamp').textContent = timeStr;
-                    document.getElementById('res-coords').textContent = `${farm.lat}° N, ${farm.lon}° E`;
-                    document.getElementById('res-norm-val').textContent = pred_val.toFixed(4);
+                    for (let i = 0; i < Math.min(24, apiData.hourly.time.length); i++) {
+                        const { vec, timeStr } = extractFeatures(apiData.hourly, i);
+                        const pred_val = forwardPass(vec);
+                        const pct = pred_val * 100;
+                        labels.push(timeStr.split('T')[1]);
+                        predictions.push(pct);
+                        sumPower += pred_val;
+                    }
+
+                    const current_pred = predictions[0] / 100.0;
+                    const avg_pct = (predictions.reduce((a,b)=>a+b, 0) / predictions.length).toFixed(2) + '%';
+
+                    // 1000 kW plant capacity assumption
+                    const est_kWh = sumPower * 1000 * 0.15; // 0.15€/kWh rate
+                    const est_co2 = sumPower * 1000 * 0.4; // 0.4 kg CO2 / kWh
+
+                    document.getElementById('kpi-output').textContent = (current_pred * 100).toFixed(2) + '%';
+                    document.getElementById('kpi-revenue').textContent = '€' + est_kWh.toFixed(2);
+                    document.getElementById('kpi-co2').textContent = est_co2.toFixed(1) + ' kg';
+
+                    document.getElementById('res-plant-name').textContent = plantName;
+                    document.getElementById('res-timestamp').textContent = apiData.hourly.time[0];
+                    document.getElementById('res-coords').textContent = `${lat}° N, ${lon}° E`;
+                    document.getElementById('res-norm-val').textContent = current_pred.toFixed(4);
+
+                    renderChart(labels, predictions);
 
                 } catch (err) {
                     alert("Forecast error: " + err);
@@ -354,10 +433,9 @@
                 }
             });
 
-            // Auto-trigger initial forecast
-            setTimeout(() => {
-                form.dispatchEvent(new Event('submit'));
-            }, 300);
+            // Initial fill
+            plantSelect.dispatchEvent(new Event('change'));
+            setTimeout(() => form.dispatchEvent(new Event('submit')), 300);
         });
     </script>
 </body>
