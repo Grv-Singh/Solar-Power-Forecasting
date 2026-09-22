@@ -1,109 +1,132 @@
+import os
+import argparse
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-def create_sequences(X, y, time_steps=1):
-    Xs, ys = [], []
-    for i in range(len(X) - time_steps):
-        v = X[i:(i + time_steps)]
-        Xs.append(v)
-        ys.append(y[i + time_steps])
-    return np.array(Xs), np.array(ys)
+from dataset import load_all_pv_datasets, get_train_test_data
 
-def main():
-    print("Loading dataset...")
-    # Load dataset with correct delimiter
-    dataset = pd.read_csv('pv_01.csv', sep=';')
-
-    # Drop index column and empty trailing column
-    if 'time_idx' in dataset.columns:
-        dataset = dataset.drop(columns=['time_idx'])
-    if 'Unnamed: 51' in dataset.columns:
-        dataset = dataset.drop(columns=['Unnamed: 51'])
-
-    # Check for target column
-    if 'power_normed' not in dataset.columns:
-        raise ValueError("Column 'power_normed' not found.")
-
-    features = dataset.drop(columns=['power_normed']).values
-    target = dataset['power_normed'].values.reshape(-1, 1)
-
-    # Split into train and test - Time Series Split (no random shuffle)
-    train_size = int(len(dataset) * 0.8)
-
-    # LSTM usually works better with scaling
-    scaler_X = MinMaxScaler()
-    scaler_y = MinMaxScaler()
-
-    # Fit on training data only to avoid data leakage
-    X_train_raw = features[:train_size]
-    X_test_raw = features[train_size:]
-    y_train_raw = target[:train_size]
-    y_test_raw = target[train_size:]
-
-    X_train_scaled = scaler_X.fit_transform(X_train_raw)
-    X_test_scaled = scaler_X.transform(X_test_raw)
-
-    y_train_scaled = scaler_y.fit_transform(y_train_raw)
-    y_test_scaled = scaler_y.transform(y_test_raw)
-
-    # Create sequences
-    # Using 8 steps (approx 1 day given 3h resolution)
-    TIME_STEPS = 8
-
-    X_train, y_train = create_sequences(X_train_scaled, y_train_scaled, TIME_STEPS)
-    X_test, y_test = create_sequences(X_test_scaled, y_test_scaled, TIME_STEPS)
-
-    print(f"X_train shape: {X_train.shape}")
-    print(f"y_train shape: {y_train.shape}")
-    print(f"X_test shape: {X_test.shape}")
-    print(f"y_test shape: {y_test.shape}")
-
-    # Build LSTM model
+def build_lstm_model(input_shape, lstm_units=[64, 32], dropout_rate=0.2):
+    """
+    Builds a Sequential LSTM model for time series regression.
+    """
     model = tf.keras.models.Sequential()
-    # Input shape: (time_steps, features)
-    model.add(tf.keras.layers.LSTM(units=64, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-    model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.LSTM(units=32, return_sequences=False))
-    model.add(tf.keras.layers.Dropout(0.2))
+    model.add(tf.keras.layers.Input(shape=input_shape))
+
+    for i, units in enumerate(lstm_units):
+        return_sequences = (i < len(lstm_units) - 1)
+        model.add(tf.keras.layers.LSTM(units=units, return_sequences=return_sequences))
+        if dropout_rate > 0:
+            model.add(tf.keras.layers.Dropout(dropout_rate))
+
     model.add(tf.keras.layers.Dense(units=1))
+    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
+    return model
 
-    model.compile(optimizer='adam', loss='mean_squared_error')
+def train_and_evaluate_lstm(plant_id='all', sequence_length=8, epochs=30, batch_size=32, pca_components=None):
+    """
+    Trains and evaluates LSTM model for a specific plant or across all plants.
+    """
+    print(f"\n==========================================")
+    print(f"Training LSTM Model (Plant ID: {plant_id}, Seq Length: {sequence_length}, PCA: {pca_components})")
+    print(f"==========================================")
 
-    print("Starting training...")
-    # Shuffle=False is often used for stateful LSTMs, but here samples are created as windows.
-    # Shuffling windows is fine and helps training convergence.
+    data = get_train_test_data(
+        plant_id=plant_id,
+        test_size=0.2,
+        sequence_length=sequence_length,
+        pca_components=pca_components,
+        scaler_type='minmax'
+    )
+
+    X_train, X_test = data['X_train'], data['X_test']
+    y_train, y_test = data['y_train'], data['y_test']
+    scaler_y = data['scaler_y']
+
+    # Input shape for LSTM: (time_steps, features)
+    input_shape = (X_train.shape[1], X_train.shape[2])
+    model = build_lstm_model(input_shape=input_shape, lstm_units=[64, 32], dropout_rate=0.2)
+
     history = model.fit(
         X_train, y_train,
-        epochs=50,
-        batch_size=32,
+        batch_size=batch_size,
+        epochs=epochs,
         validation_split=0.1,
         verbose=1,
         shuffle=True
     )
 
     # Predict
-    print("Evaluating...")
     y_pred_scaled = model.predict(X_test)
 
-    # Inverse transform to get actual values
-    y_pred = scaler_y.inverse_transform(y_pred_scaled)
-    y_test_inv = scaler_y.inverse_transform(y_test)
+    # Inverse scale to original domain
+    y_pred = scaler_y.inverse_transform(y_pred_scaled.reshape(-1, 1)).flatten()
+    y_test_orig = scaler_y.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
-    # Evaluate
-    mse = mean_squared_error(y_test_inv, y_pred)
+    mse = mean_squared_error(y_test_orig, y_pred)
     rmse = np.sqrt(mse)
-    r2 = r2_score(y_test_inv, y_pred)
+    mae = mean_absolute_error(y_test_orig, y_pred)
+    r2 = r2_score(y_test_orig, y_pred)
 
-    print(f"\nResults:")
-    print(f"Root Mean Squared Error (RMSE): {rmse}")
-    print(f"R^2 Score: {r2}")
+    print(f"\nLSTM Evaluation Results (Plant: {plant_id}):")
+    print(f"  RMSE: {rmse:.4f}")
+    print(f"  MAE:  {mae:.4f}")
+    print(f"  R^2:  {r2:.4f}")
 
-    # Save the model
-    model.save('solar_lstm_model.keras')
-    print("Model saved to solar_lstm_model.keras")
+    return model, {'rmse': rmse, 'mae': mae, 'r2': r2}
+
+def evaluate_all_plants_lstm(sequence_length=8, epochs=15, batch_size=32):
+    """
+    Evaluates LSTM model across all 21 PV facilities.
+    """
+    all_datasets = load_all_pv_datasets()
+    plant_ids = sorted(all_datasets.keys())
+    results = []
+
+    print(f"\nEvaluating LSTM across {len(plant_ids)} solar facilities...")
+    for pid in plant_ids:
+        _, metrics = train_and_evaluate_lstm(
+            plant_id=pid,
+            sequence_length=sequence_length,
+            epochs=epochs,
+            batch_size=batch_size
+        )
+        results.append({'plant_id': pid, **metrics})
+
+    df_res = pd.DataFrame(results)
+    print("\nSummary of LSTM Performance Across All 21 Solar Facilities:")
+    print(df_res.to_string(index=False))
+    print(f"\nMean RMSE: {df_res['rmse'].mean():.4f}")
+    print(f"Mean MAE:  {df_res['mae'].mean():.4f}")
+    print(f"Mean R^2:  {df_res['r2'].mean():.4f}")
+    return df_res
+
+def main():
+    parser = argparse.ArgumentParser(description="Train and evaluate Solar Power Forecasting LSTM model.")
+    parser.add_argument('--plant_id', type=str, default='all', help="PV Plant ID (1-21) or 'all' or 'eval_all'")
+    parser.add_argument('--seq_length', type=int, default=8, help="Sequence length (time steps)")
+    parser.add_argument('--epochs', type=int, default=20, help="Number of training epochs")
+    parser.add_argument('--batch_size', type=int, default=32, help="Batch size")
+    parser.add_argument('--pca', type=int, default=None, help="Number of PCA components (optional)")
+    parser.add_argument('--save_model', type=str, default='solar_lstm_model.keras', help="Output model path")
+
+    args = parser.parse_args()
+
+    if args.plant_id == 'eval_all':
+        evaluate_all_plants_lstm(sequence_length=args.seq_length, epochs=args.epochs, batch_size=args.batch_size)
+    else:
+        plant_id = int(args.plant_id) if args.plant_id.isdigit() else args.plant_id
+        model, metrics = train_and_evaluate_lstm(
+            plant_id=plant_id,
+            sequence_length=args.seq_length,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            pca_components=args.pca
+        )
+        if args.save_model:
+            model.save(args.save_model)
+            print(f"LSTM Model saved successfully to {args.save_model}")
 
 if __name__ == "__main__":
     main()
