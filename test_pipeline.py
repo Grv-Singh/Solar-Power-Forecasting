@@ -39,6 +39,57 @@ class TestSolarPipeline(unittest.TestCase):
         self.assertEqual(len(timestamps), 8)
         self.assertEqual(farm_info['lat'], GERMAN_SOLAR_FARMS[1]['lat'])
 
+    def test_open_meteo_helper_functions(self):
+        from live_api import (
+            _parse_time_features,
+            _extract_raw_weather,
+            _normalize_weather_features,
+            _calculate_solar_position,
+            build_feature_vector_from_open_meteo,
+        )
+
+        # Test time parsing helper
+        time_feats = _parse_time_features("2026-06-15T12:00")
+        self.assertEqual(time_feats['hour'], 12)
+        self.assertAlmostEqual(time_feats['hour_norm'], 12 / 23.0)
+
+        # Test raw weather extraction helper with missing keys (defaults fallback)
+        dummy_hourly = {"time": ["2026-06-15T12:00"]}
+        raw = _extract_raw_weather(dummy_hourly, 0)
+        self.assertEqual(raw['temp'], 15.0)
+        self.assertEqual(raw['rh'], 50.0)
+
+        # Test normalization helper
+        raw_custom = {
+            'temp': 20.0,
+            'rh': 60.0,
+            'dew': 10.0,
+            'press': 1000.0,
+            'cloud': 50.0,
+            'snow': 0.0,
+            'dni': 500.0,
+            'diffuse': 250.0,
+            'sw': 500.0,
+            'ws10': 10.0,
+            'wd10': 180.0,
+            'ws100': 15.0,
+            'wd100': 180.0,
+        }
+        norm = _normalize_weather_features(raw_custom)
+        self.assertAlmostEqual(norm['temp_norm'], (20.0 + 20) / 60.0)
+        self.assertAlmostEqual(norm['global_norm'], 0.5)
+
+        # Test solar position helper
+        solar = _calculate_solar_position(12, 0.5)
+        self.assertGreater(solar['solar_height'], 0.0)
+        self.assertAlmostEqual(solar['extra_terr'], 0.45)
+
+        # Test full feature vector construction from dictionary
+        vec, ts = build_feature_vector_from_open_meteo(dummy_hourly, time_idx=0)
+        self.assertEqual(vec.shape, (49,))
+        self.assertEqual(ts, "2026-06-15T12:00")
+        self.assertTrue(np.all(np.isfinite(vec)))
+
     def test_predict_live_cli(self):
         res_ann = predict_live(plant_id=1, model_type='ann')
         self.assertEqual(res_ann['model_type'], 'ANN')
