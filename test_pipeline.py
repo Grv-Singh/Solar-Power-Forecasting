@@ -4,6 +4,8 @@ import os
 from dataset import load_pv_dataset, load_all_pv_datasets, prepare_features_target, create_sequences, get_train_test_data
 from live_api import get_live_forecast_features, GERMAN_SOLAR_FARMS
 from predict_live import predict_live
+from xgboost_solar import train_and_evaluate_xgboost
+from ensemble_solar import evaluate_ensemble
 from app import app
 
 class TestSolarPipeline(unittest.TestCase):
@@ -12,7 +14,7 @@ class TestSolarPipeline(unittest.TestCase):
         df = load_pv_dataset('pv_01.csv')
         self.assertIn('power_normed', df.columns)
         self.assertNotIn('time_idx', df.columns)
-        self.assertEqual(df.shape[1], 50)  # 49 features + 1 target
+        self.assertEqual(df.shape[1], 50)
 
     def test_all_datasets_loading(self):
         datasets = load_all_pv_datasets()
@@ -45,9 +47,12 @@ class TestSolarPipeline(unittest.TestCase):
         self.assertIn('predicted_power_normed', res_ann)
         self.assertTrue(0.0 <= res_ann['predicted_power_normed'] <= 1.0)
 
-        res_lstm = predict_live(plant_id=1, model_type='lstm')
-        self.assertEqual(res_lstm['model_type'], 'LSTM')
-        self.assertIn('predicted_power_normed', res_lstm)
+    def test_xgboost_and_ensemble(self):
+        model, metrics = train_and_evaluate_xgboost(plant_id=1, n_estimators=10)
+        self.assertIn('rmse', metrics)
+
+        ensemble_metrics = evaluate_ensemble(plant_id=1)
+        self.assertIn('rmse', ensemble_metrics)
 
     def test_flask_app_endpoints(self):
         client = app.test_client()

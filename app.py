@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from predict_live import predict_live
 from live_api import GERMAN_SOLAR_FARMS
 
@@ -7,14 +7,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
 def index():
-    return jsonify({
-        'service': 'Solar Power Forecasting Live API',
-        'status': 'active',
-        'endpoints': {
-            '/farms': 'GET - List all 21 solar farm locations',
-            '/predict': 'GET - Predict solar power output for a plant. Query params: plant_id (1-21), model (ann|lstm)'
-        }
-    })
+    return render_template('index.html')
 
 @app.route('/farms', methods=['GET'])
 def get_farms():
