@@ -47,15 +47,11 @@ def fetch_open_meteo_live_data(lat, lon):
 
     return response.json()
 
-def build_feature_vector_from_open_meteo(hourly_data, time_idx=0):
+def _parse_time_features(time_str):
     """
-    Constructs a normalized 49-feature vector matching dataset.py column order
-    from Open-Meteo hourly API response.
+    Parses ISO time string and returns normalized/cyclical hour, month, and season features.
     """
-    # Parse time
-    time_str = hourly_data['time'][time_idx]
     dt = datetime.fromisoformat(time_str)
-
     hour = dt.hour
     month = dt.month
 
@@ -72,99 +68,150 @@ def build_feature_vector_from_open_meteo(hourly_data, time_idx=0):
     season_cos = math.cos(2 * math.pi * season / 4.0)
     season_sin = math.sin(2 * math.pi * season / 4.0)
 
-    temp = hourly_data['temperature_2m'][time_idx] if 'temperature_2m' in hourly_data else 15.0
-    rh = hourly_data['relative_humidity_2m'][time_idx] if 'relative_humidity_2m' in hourly_data else 50.0
-    dew = hourly_data['dew_point_2m'][time_idx] if 'dew_point_2m' in hourly_data else 10.0
-    press = hourly_data['surface_pressure'][time_idx] if 'surface_pressure' in hourly_data else 1013.25
-    cloud = hourly_data['cloud_cover'][time_idx] if 'cloud_cover' in hourly_data else 20.0
-    snow = hourly_data['snow_depth'][time_idx] if 'snow_depth' in hourly_data else 0.0
+    return {
+        'hour': hour,
+        'hour_norm': hour_norm,
+        'hour_cos': hour_cos,
+        'hour_sin': hour_sin,
+        'month_norm': month_norm,
+        'month_cos': month_cos,
+        'month_sin': month_sin,
+        'season_norm': season_norm,
+        'season_cos': season_cos,
+        'season_sin': season_sin,
+    }
 
-    dni = hourly_data['direct_normal_irradiance'][time_idx] if 'direct_normal_irradiance' in hourly_data else 0.0
-    diffuse = hourly_data['diffuse_radiation'][time_idx] if 'diffuse_radiation' in hourly_data else 0.0
-    sw = hourly_data['shortwave_radiation'][time_idx] if 'shortwave_radiation' in hourly_data else 0.0
+def _extract_raw_weather(hourly_data, time_idx):
+    """
+    Extracts weather variables from hourly Open-Meteo dictionary with default fallbacks.
+    """
+    return {
+        'temp': hourly_data['temperature_2m'][time_idx] if 'temperature_2m' in hourly_data else 15.0,
+        'rh': hourly_data['relative_humidity_2m'][time_idx] if 'relative_humidity_2m' in hourly_data else 50.0,
+        'dew': hourly_data['dew_point_2m'][time_idx] if 'dew_point_2m' in hourly_data else 10.0,
+        'press': hourly_data['surface_pressure'][time_idx] if 'surface_pressure' in hourly_data else 1013.25,
+        'cloud': hourly_data['cloud_cover'][time_idx] if 'cloud_cover' in hourly_data else 20.0,
+        'snow': hourly_data['snow_depth'][time_idx] if 'snow_depth' in hourly_data else 0.0,
+        'dni': hourly_data['direct_normal_irradiance'][time_idx] if 'direct_normal_irradiance' in hourly_data else 0.0,
+        'diffuse': hourly_data['diffuse_radiation'][time_idx] if 'diffuse_radiation' in hourly_data else 0.0,
+        'sw': hourly_data['shortwave_radiation'][time_idx] if 'shortwave_radiation' in hourly_data else 0.0,
+        'ws10': hourly_data['wind_speed_10m'][time_idx] if 'wind_speed_10m' in hourly_data else 3.0,
+        'wd10': hourly_data['wind_direction_10m'][time_idx] if 'wind_direction_10m' in hourly_data else 180.0,
+        'ws100': hourly_data['wind_speed_100m'][time_idx] if 'wind_speed_100m' in hourly_data else 5.0,
+        'wd100': hourly_data['wind_direction_100m'][time_idx] if 'wind_direction_100m' in hourly_data else 180.0,
+    }
 
-    ws10 = hourly_data['wind_speed_10m'][time_idx] if 'wind_speed_10m' in hourly_data else 3.0
-    wd10 = hourly_data['wind_direction_10m'][time_idx] if 'wind_direction_10m' in hourly_data else 180.0
-    ws100 = hourly_data['wind_speed_100m'][time_idx] if 'wind_speed_100m' in hourly_data else 5.0
-    wd100 = hourly_data['wind_direction_100m'][time_idx] if 'wind_direction_100m' in hourly_data else 180.0
+def _normalize_weather_features(raw):
+    """
+    Normalizes raw weather inputs to match dataset bounds and computes wind components.
+    """
+    wd10_rad = math.radians(raw['wd10'])
+    wd100_rad = math.radians(raw['wd100'])
 
-    # Normalized feature approximations matching min-max bounds in pv_*.csv
-    temp_norm = np.clip((temp + 20) / 60.0, 0, 1)
-    rh_norm = np.clip(rh / 100.0, 0, 1)
-    dew_norm = np.clip((dew + 20) / 40.0, 0, 1)
-    press_norm = np.clip((press - 950) / 100.0, 0, 1)
-    cloud_norm = np.clip(cloud / 100.0, 0, 1)
-    snow_norm = np.clip(snow / 1.0, 0, 1)
-
-    dni_norm = np.clip(dni / 1000.0, 0, 1)
-    diffuse_norm = np.clip(diffuse / 500.0, 0, 1)
-    global_norm = np.clip(sw / 1000.0, 0, 1)
-
-    ws10_norm = np.clip(ws10 / 25.0, 0, 1)
-    wd10_rad = math.radians(wd10)
+    ws10_norm = np.clip(raw['ws10'] / 25.0, 0, 1)
+    ws100_norm = np.clip(raw['ws100'] / 35.0, 0, 1)
     wd10_cos = math.cos(wd10_rad)
     wd10_sin = math.sin(wd10_rad)
-
-    ws100_norm = np.clip(ws100 / 35.0, 0, 1)
-    wd100_rad = math.radians(wd100)
     wd100_cos = math.cos(wd100_rad)
     wd100_sin = math.sin(wd100_rad)
 
-    # Simple solar height & zenith approximation
+    return {
+        'temp_norm': np.clip((raw['temp'] + 20) / 60.0, 0, 1),
+        'rh_norm': np.clip(raw['rh'] / 100.0, 0, 1),
+        'dew_norm': np.clip((raw['dew'] + 20) / 40.0, 0, 1),
+        'press_norm': np.clip((raw['press'] - 950) / 100.0, 0, 1),
+        'cloud_norm': np.clip(raw['cloud'] / 100.0, 0, 1),
+        'snow_norm': np.clip(raw['snow'] / 1.0, 0, 1),
+        'dni_norm': np.clip(raw['dni'] / 1000.0, 0, 1),
+        'diffuse_norm': np.clip(raw['diffuse'] / 500.0, 0, 1),
+        'global_norm': np.clip(raw['sw'] / 1000.0, 0, 1),
+        'ws10_norm': ws10_norm,
+        'wd10_deg': raw['wd10'],
+        'wd10_cos': wd10_cos,
+        'wd10_sin': wd10_sin,
+        'ws100_norm': ws100_norm,
+        'wd100_deg': raw['wd100'],
+        'wd100_cos': wd100_cos,
+        'wd100_sin': wd100_sin,
+    }
+
+def _calculate_solar_position(hour, global_norm):
+    """
+    Approximates solar height, zenith, azimuth, and extraterrestrial radiation.
+    """
     solar_height = max(0.0, math.sin(math.radians(max(0, (12 - abs(hour - 12)) * 15))))
     theta_z = 1.0 - solar_height
-    solar_azimuth = (hour / 24.0)
+    solar_azimuth = hour / 24.0
+    extra_terr = global_norm * 0.9
+
+    return {
+        'solar_height': solar_height,
+        'theta_z': theta_z,
+        'solar_azimuth': solar_azimuth,
+        'extra_terr': extra_terr,
+    }
+
+def build_feature_vector_from_open_meteo(hourly_data, time_idx=0):
+    """
+    Constructs a normalized 49-feature vector matching dataset.py column order
+    from Open-Meteo hourly API response.
+    """
+    time_str = hourly_data['time'][time_idx]
+    time_feats = _parse_time_features(time_str)
+    raw_weather = _extract_raw_weather(hourly_data, time_idx)
+    norm_weather = _normalize_weather_features(raw_weather)
+    solar_feats = _calculate_solar_position(time_feats['hour'], norm_weather['global_norm'])
 
     feature_dict = {
-        'hour_of_day': hour_norm,
-        'hour_of_day_cos': hour_cos,
-        'hour_of_day_sin': hour_sin,
-        'month_of_year': month_norm,
-        'month_of_year_cos': month_cos,
-        'month_of_year_sin': month_sin,
-        'season_of_year': season_norm,
-        'season_of_year_cos': season_cos,
-        'season_of_year_sin': season_sin,
-        'sunposition_thetaZ': theta_z,
-        'sunposition_solarAzimuth': solar_azimuth,
-        'sunposition_extraTerr': global_norm * 0.9,
-        'sunposition_solarHeight': solar_height,
-        'clearsky_diffuse': diffuse_norm,
-        'clearsky_direct': dni_norm,
-        'clearsky_global': global_norm,
-        'clearsky_diffuse_agg': diffuse_norm,
-        'clearsky_direct_agg': dni_norm,
-        'clearsky_global_agg': global_norm,
+        'hour_of_day': time_feats['hour_norm'],
+        'hour_of_day_cos': time_feats['hour_cos'],
+        'hour_of_day_sin': time_feats['hour_sin'],
+        'month_of_year': time_feats['month_norm'],
+        'month_of_year_cos': time_feats['month_cos'],
+        'month_of_year_sin': time_feats['month_sin'],
+        'season_of_year': time_feats['season_norm'],
+        'season_of_year_cos': time_feats['season_cos'],
+        'season_of_year_sin': time_feats['season_sin'],
+        'sunposition_thetaZ': solar_feats['theta_z'],
+        'sunposition_solarAzimuth': solar_feats['solar_azimuth'],
+        'sunposition_extraTerr': solar_feats['extra_terr'],
+        'sunposition_solarHeight': solar_feats['solar_height'],
+        'clearsky_diffuse': norm_weather['diffuse_norm'],
+        'clearsky_direct': norm_weather['dni_norm'],
+        'clearsky_global': norm_weather['global_norm'],
+        'clearsky_diffuse_agg': norm_weather['diffuse_norm'],
+        'clearsky_direct_agg': norm_weather['dni_norm'],
+        'clearsky_global_agg': norm_weather['global_norm'],
         'Albedo': 0.15,
-        'WindComponentUat0': ws10_norm * wd10_sin,
-        'WindComponentVat0': ws10_norm * wd10_cos,
-        'WindComponentUat100': ws100_norm * wd100_sin,
-        'WindComponentVat100': ws100_norm * wd100_cos,
-        'DewpointTemperatureAt0': dew_norm,
-        'TemperatureAt0': temp_norm,
+        'WindComponentUat0': norm_weather['ws10_norm'] * norm_weather['wd10_sin'],
+        'WindComponentVat0': norm_weather['ws10_norm'] * norm_weather['wd10_cos'],
+        'WindComponentUat100': norm_weather['ws100_norm'] * norm_weather['wd100_sin'],
+        'WindComponentVat100': norm_weather['ws100_norm'] * norm_weather['wd100_cos'],
+        'DewpointTemperatureAt0': norm_weather['dew_norm'],
+        'TemperatureAt0': norm_weather['temp_norm'],
         'PotentialVorticityAt1000': 0.5,
         'PotentialVorticityAt950': 0.5,
-        'RelativeHumidityAt1000': rh_norm,
-        'RelativeHumidityAt950': rh_norm,
-        'RelativeHumidityAt0': rh_norm,
-        'SnowDensityAt0': snow_norm * 0.3,
-        'SnowDepthAt0': snow_norm,
+        'RelativeHumidityAt1000': norm_weather['rh_norm'],
+        'RelativeHumidityAt950': norm_weather['rh_norm'],
+        'RelativeHumidityAt0': norm_weather['rh_norm'],
+        'SnowDensityAt0': norm_weather['snow_norm'] * 0.3,
+        'SnowDepthAt0': norm_weather['snow_norm'],
         'SnowfallPlusStratiformSurfaceAt0': 0.0,
-        'SurfacePressureAt0': press_norm,
-        'SolarRadiationGlobalAt0': global_norm,
-        'SolarRadiationDirectAt0': dni_norm,
-        'SolarRadiationDiffuseAt0': diffuse_norm,
-        'TotalCloudCoverAt0': cloud_norm,
-        'LowerWindSpeed': ws10_norm,
-        'LowerWindDirection': wd10 / 360.0,
-        'LowerWindDirectionMath': wd10 / 360.0,
-        'LowerWindDirectionCos': wd10_cos,
-        'LowerWindDirectionSin': wd10_sin,
-        'UpperWindSpeed': ws100_norm,
-        'UpperWindDirection': wd100 / 360.0,
-        'UpperWindDirectionMath': wd100 / 360.0,
-        'UpperWindDirectionCos': wd100_cos,
-        'UpperWindDirectionSin': wd100_sin
+        'SurfacePressureAt0': norm_weather['press_norm'],
+        'SolarRadiationGlobalAt0': norm_weather['global_norm'],
+        'SolarRadiationDirectAt0': norm_weather['dni_norm'],
+        'SolarRadiationDiffuseAt0': norm_weather['diffuse_norm'],
+        'TotalCloudCoverAt0': norm_weather['cloud_norm'],
+        'LowerWindSpeed': norm_weather['ws10_norm'],
+        'LowerWindDirection': norm_weather['wd10_deg'] / 360.0,
+        'LowerWindDirectionMath': norm_weather['wd10_deg'] / 360.0,
+        'LowerWindDirectionCos': norm_weather['wd10_cos'],
+        'LowerWindDirectionSin': norm_weather['wd10_sin'],
+        'UpperWindSpeed': norm_weather['ws100_norm'],
+        'UpperWindDirection': norm_weather['wd100_deg'] / 360.0,
+        'UpperWindDirectionMath': norm_weather['wd100_deg'] / 360.0,
+        'UpperWindDirectionCos': norm_weather['wd100_cos'],
+        'UpperWindDirectionSin': norm_weather['wd100_sin']
     }
 
     return np.array(list(feature_dict.values()), dtype=np.float32), time_str
